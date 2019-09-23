@@ -33,3 +33,5 @@ When adding a panel to a dashboard, choose the newly created data source. Under 
 
 Note: This app is inspired from https://github.com/bluefrg/jira-grafana-json-datasource which works with JIRA Cloud
 srinivasraja54/Jira_Grafana_API supposedly work with both Jira Server & Jira Cloud
+
+
