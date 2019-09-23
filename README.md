@@ -1,4 +1,4 @@
-# Jira Grafana Simple JSON microservice
+# Jira Grafana SimpleJSON microservice
 ### Connect Grafana to Jira Cloud to retrieve metrics on your Jira issues.
 
 The original intention for this project was to allow me to show a singlestat count of open issues for my team's Jira Service Desk.
@@ -29,5 +29,9 @@ To add this as a data source in Grafana, go to Configuration -> Data Sources and
 
 When adding a panel to a dashboard, choose the newly created data source. Under the metrics tab, you will see your Jira filters as an option to plot on your panel.
 
+
+
+Note: This app is inspired from https://github.com/bluefrg/jira-grafana-json-datasource which works with JIRA Cloud
+srinivasraja54/Jira_Grafana_API supposedly work with both Jira Server & Jira Cloud
 
 
