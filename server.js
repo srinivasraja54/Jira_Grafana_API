@@ -12,6 +12,8 @@ var jirahost = process.env.JIRA_HOST
 var username1 = process.env.JIRA_USER
 var password1 = process.env.JIRA_PASS
 
+console.log(jirahost,username1,password1)
+
 app.use(bodyParser.json())
 app.use(morgan('combined'))
 app.use(passport.initialize())
@@ -62,10 +64,12 @@ passport.authenticate(authenticationStrategy, { session: false }),
     httpRes.set('Content-Type', 'text/plain')
     httpRes.send(new Date() + ': OK')
 })
-url1 = 'http://'+jirahost+'/rest/api/2/filter/favourite'
+
+
 app.all('/search',
 //passport.authenticate(authenticationStrategy, { session: false }),
 (httpReq, httpRes) => {
+    url1 = 'http://'+jirahost+'/rest/api/2/filter/favourite'
     getOutput(url1).then(content => {
       let result = content.map(filter => {
       return{
