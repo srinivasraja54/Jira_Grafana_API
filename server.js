@@ -1,31 +1,28 @@
+const request = require("request")
 const express = require('express')
 const bodyParser = require('body-parser')
 const app = express()
-const JiraClient = require('jira-connector')
 const morgan = require('morgan')
 const passport = require('passport')
 const BasicStrategy = require('passport-http').BasicStrategy
-const AnonymousStrategy = require('passport-anonymous')
+const AnonymousStrategy = require('passport-anonymous')      
 
+ 
+var jirahost = process.env.JIRA_HOST
+var username1 = process.env.JIRA_USER
+var password1 = process.env.JIRA_PASS
 
-// Instantiate our Jira client
-const jira = new JiraClient({
-  host: process.env.JIRA_HOST,
-  basic_auth: {
-    username: process.env.JIRA_USER,
-    password: process.env.JIRA_PASS
-  }
-})
+app.use(bodyParser.json())
+app.use(morgan('combined'))
+app.use(passport.initialize())
 
-
-// Setup an authentication strategy
 let authenticationStrategy = null
 if (process.env.HTTP_USER) {
   passport.use(new BasicStrategy(
     function (username, password, done) {
 
-        if (process.env.HTTP_USER == username &&
-           process.env.HTTP_PASS == password) {
+        if (username1 == username &&
+          password1 == password) {
           return done(null, true)
         }
 
@@ -41,99 +38,79 @@ else {
   authenticationStrategy = 'anonymous'
 }
 
+getOutput = (arg_url) => {
+  return new Promise((resolve, reject) => {
+    request({
+      url: arg_url,
+      auth: {
+        user: username1,
+        password: password1
+      },
+      rejectUnauthorized: false
+    }, function(error,response,body){
+      if(!error)
+      var content = JSON.parse(body)
+      resolve(content)
+    })
+  }
+)
+}
 
-app.use(bodyParser.json())
-app.use(morgan('combined')) // We want to log all HTTP requests
-app.use(passport.initialize())
-
-
-// Should return 200 ok. Used for "Test connection" on the datasource config page.
 app.get('/',
-  passport.authenticate(authenticationStrategy, { session: false }),
+passport.authenticate(authenticationStrategy, { session: false }),
   (httpReq, httpRes) => {
     httpRes.set('Content-Type', 'text/plain')
     httpRes.send(new Date() + ': OK')
 })
-
-
-// Test the connection between Jira and this project
-app.get('/test-jira',
-  passport.authenticate(authenticationStrategy, { session: false }),
-  (httpReq, httpRes) => {
-    
-    jira.myself.getMyself().then((jiraRes) => {
-      httpRes.json(jiraRes)
-    }).catch((jiraErr) => {
-      httpRes.json(JSON.parse(jiraErr))
+url1 = 'http://'+jirahost+'/rest/api/2/filter/favourite'
+app.all('/search',
+//passport.authenticate(authenticationStrategy, { session: false }),
+(httpReq, httpRes) => {
+    getOutput(url1).then(content => {
+      let result = content.map(filter => {
+      return{
+      text: filter.id,
+      value: filter.name
+    }
     })
-
-  })
-
-
-// Used by the find metric options on the query tab in panels.
-app.all('/search', 
-  passport.authenticate(authenticationStrategy, { session: false }),
-  (httpReq, httpRes) => {
-
-  // The JiraClient doesn't have any way to list filters so we need to do a custom query
-  jira.makeRequest({
-    uri: jira.buildURL('/filter')
-  }).then((jiraRes) => {
-  
-    let result = jiraRes.map(filter => {
-      return {
-        text: filter.name,
-        value: filter.id
-      }
-    })
-
     httpRes.json(result)
-  })
-  
+})
 })
 
 
-// Should return metrics based on input.
+
 app.post('/query', 
-  passport.authenticate(authenticationStrategy, { session: false }),
+  //passport.authenticate(authenticationStrategy, { session: false }),
   (httpReq, httpRes) => {
-
+  
   let result = []
-
-  // Convert proper formatted Grafana data into the Jira mess
-  let from = new Date(httpReq.body.range.from).toISOString().replace(/T/, ' ').replace(/\:([^:]*)$/, '')
-  let to = new Date(httpReq.body.range.to).toISOString().replace(/T/, ' ').replace(/\:([^:]*)$/, '')
-
+  let from = new Date(httpReq.body.range.from).toISOString().replace(/T/, ' ').replace([/-/], '/').replace(/\:([^:]*)$/, '').replace(/-/g, '/')
+  let to = new Date(httpReq.body.range.to).toISOString().replace(/T/, ' ').replace(/-/, '/').replace(/\:([^:]*)$/, '').replace(/-/g, '/')
+  
   let p = httpReq.body.targets.map(target => {
 
     // Default jql with time range
     let jql = [`created >= "${from}"`, `created <= "${to}"`]
-
-    // Additional jql for targets
     if ( target.target ) {
       jql.push(`filter = "${target.target}"`)
     }
-
-    return jira.search.search({
-      jql: jql.join(' AND ')
-    }).then((jiraRes) => {
-
-      if (target.type == 'timeserie') {
-        
-        let datapoints = jiraRes.issues.map(issue => {
+    query=jql.join(' AND ')
+    var url2 = 'http://'+jirahost+'/rest/api/2/search?jql='+query+'&maxResults=-1'
+    var url2 = url2.split(' ').join('+')
+    try {
+    getOutput(url2).then(body => {
+        if (target.type == 'timeserie') {
+        let datapoints = body.issues.map(issue => {
           timestamp = Math.floor(new Date(issue.fields.created))
           return [1, timestamp]
         })
-
         result.push({
           target: target.target,
           datapoints: datapoints
         })
-
       }
       else if (target.type == 'table') {
-
-        let rows = jiraRes.issues.map(issue => {
+        let rows = body.issues.map(issue => {
           return [
             issue.key,
             issue.fields.summary,
@@ -142,7 +119,6 @@ app.post('/query',
             issue.fields.created
           ]
         })
-
         result.push({
           columns: [
             { text: 'Key', 'type': 'string' },
@@ -155,18 +131,15 @@ app.post('/query',
           rows: rows
         })
       }
-
-
-    })
+        return httpRes.json(result)
+   
+  } 
+).catch(e => console.error(`Warning Ingorable : ${e})`));
+}catch(error) {
+  return httpRes.json(error.message);
+}
   })
-
-  // Once all promises resolve, return result
-  Promise.all(p).then(() => {
-    httpRes.json(result)
-  })
-  
 })
-
 
 app.listen(3000)
 
