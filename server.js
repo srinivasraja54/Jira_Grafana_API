@@ -12,7 +12,6 @@ var jirahost = process.env.JIRA_HOST
 var username1 = process.env.JIRA_USER
 var password1 = process.env.JIRA_PASS
 
-console.log(jirahost,username1,password1)
 
 app.use(bodyParser.json())
 app.use(morgan('combined'))
